@@ -2,6 +2,8 @@
 
 Custom Arti SOCKS/DNS proxy image with a Docker healthcheck that verifies an endpoint through Arti's SOCKS proxy.
 
+The public SOCKS5 listener requires username/password authentication. Internally, the authenticated listener forwards traffic to Arti's localhost-only SOCKS listener.
+
 ## Build
 
 ```sh
@@ -23,6 +25,8 @@ docker run -d \
   --log-driver=local \
   --log-opt max-size=10m \
   --log-opt max-file=3 \
+  -e SOCKS_USERNAME='arti' \
+  -e SOCKS_PASSWORD='change-me' \
   -e HEALTHCHECK_URL='https://check.torproject.org/api/ip' \
   -e HEALTHCHECK_EXPECTED='"IsTor":true' \
   -e HEALTHCHECK_MAX_TIME=30 \
@@ -153,6 +157,8 @@ docker run -d \
   --log-driver=local \
   --log-opt max-size=10m \
   --log-opt max-file=3 \
+  -e SOCKS_USERNAME='arti' \
+  -e SOCKS_PASSWORD='use-a-long-random-password' \
   -e HEALTHCHECK_URL='https://check.torproject.org/api/ip' \
   -e HEALTHCHECK_EXPECTED='"IsTor":true' \
   -e HEALTHCHECK_MAX_TIME=30 \
@@ -173,6 +179,8 @@ docker run -d \
   --log-driver=local \
   --log-opt max-size=10m \
   --log-opt max-file=3 \
+  -e SOCKS_USERNAME='arti' \
+  -e SOCKS_PASSWORD='change-me' \
   -e HEALTHCHECK_URL='https://check.torproject.org/api/ip' \
   -e HEALTHCHECK_EXPECTED='"IsTor":true' \
   -e HEALTHCHECK_MAX_TIME=30 \
@@ -205,10 +213,15 @@ docker inspect arti-socks-proxy --format '{{json .State.Health}}'
 docker logs --tail=100 arti-socks-proxy
 ```
 
-Test the exposed SOCKS proxy from the host:
+## SOCKS authentication
+
+Set `SOCKS_USERNAME` and `SOCKS_PASSWORD` when running the container. The container exits if either value is missing.
+
+Test the authenticated SOCKS proxy from the host:
 
 ```sh
 curl --fail --silent --show-error --max-time 30 \
+  --proxy-user 'arti:change-me' \
   --socks5-hostname 127.0.0.1:9150 \
   https://check.torproject.org/api/ip
 ```
@@ -219,6 +232,17 @@ Expected response:
 {"IsTor":true,"IP":"..."}
 ```
 
+Remote test:
+
+```sh
+curl --fail --silent --show-error --max-time 30 \
+  --proxy-user 'arti:use-a-long-random-password' \
+  --socks5-hostname 174.138.126.205:9150 \
+  https://check.torproject.org/api/ip
+```
+
+DNS on UDP `5353` does not support username/password authentication. If you expose DNS publicly, protect it with a cloud firewall, host firewall, VPN, or do not expose it.
+
 ## Healthcheck settings
 
 | Variable | Default | Description |
@@ -226,8 +250,11 @@ Expected response:
 | `HEALTHCHECK_URL` | `https://check.torproject.org/api/ip` | Endpoint to request through the SOCKS proxy. |
 | `HEALTHCHECK_EXPECTED` | `"IsTor":true` | Text that must appear in the response. Set to an empty string to accept any HTTP 2xx response. |
 | `HEALTHCHECK_MAX_TIME` | `30` | Curl timeout in seconds. |
+| `SOCKS_USERNAME` | none | Required username for the public authenticated SOCKS5 listener. |
+| `SOCKS_PASSWORD` | none | Required password for the public authenticated SOCKS5 listener. |
 | `SOCKS_HOST` | `127.0.0.1` | Hostname or IP for the local SOCKS listener inside the container. |
-| `SOCKS_PORT` | `9150` | Port for the local SOCKS listener inside the container. |
+| `SOCKS_PORT` | `9151` | Internal Arti SOCKS listener used by the healthcheck. |
+| `PUBLIC_SOCKS_PORT` | `9150` | Public authenticated SOCKS5 listener. |
 
 ## Verify
 
@@ -240,6 +267,7 @@ Manual Tor check from the host:
 
 ```sh
 curl --fail --silent --show-error --max-time 30 \
+  --proxy-user 'arti:change-me' \
   --socks5-hostname 127.0.0.1:9150 \
   https://check.torproject.org/api/ip
 ```

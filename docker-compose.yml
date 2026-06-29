@@ -10,6 +10,8 @@ services:
       HEALTHCHECK_URL: https://check.torproject.org/api/ip
       HEALTHCHECK_EXPECTED: '"IsTor":true'
       HEALTHCHECK_MAX_TIME: 30
+      SOCKS_USERNAME: ${SOCKS_USERNAME:-arti}
+      SOCKS_PASSWORD: ${SOCKS_PASSWORD:-change-me}
     ports:
       - "9150:9150/tcp"
       - "5353:8853/udp"

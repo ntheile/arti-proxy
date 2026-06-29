@@ -6,6 +6,8 @@ PLATFORM ?= linux/amd64
 HEALTHCHECK_URL ?= https://check.torproject.org/api/ip
 HEALTHCHECK_EXPECTED ?= "IsTor":true
 HEALTHCHECK_MAX_TIME ?= 30
+SOCKS_USERNAME ?= arti
+SOCKS_PASSWORD ?= change-me
 TEST_RETRIES ?= 24
 TEST_SLEEP ?= 5
 CURL_TEST_URL ?= https://check.torproject.org/api/ip
@@ -29,6 +31,8 @@ help:
 	@printf '%s\n' 'Overrides:'
 	@printf '%s\n' '  IMAGE=$(IMAGE)'
 	@printf '%s\n' '  PLATFORM=$(PLATFORM)'
+	@printf '%s\n' '  SOCKS_USERNAME=$(SOCKS_USERNAME)'
+	@printf '%s\n' '  SOCKS_PASSWORD=<hidden>'
 	@printf '%s\n' '  HEALTHCHECK_URL=$(HEALTHCHECK_URL)'
 	@printf '%s\n' '  HEALTHCHECK_EXPECTED=$(HEALTHCHECK_EXPECTED)'
 
@@ -47,6 +51,8 @@ run: build
 		-e HEALTHCHECK_URL='$(HEALTHCHECK_URL)' \
 		-e HEALTHCHECK_EXPECTED='$(HEALTHCHECK_EXPECTED)' \
 		-e HEALTHCHECK_MAX_TIME='$(HEALTHCHECK_MAX_TIME)' \
+		-e SOCKS_USERNAME='$(SOCKS_USERNAME)' \
+		-e SOCKS_PASSWORD='$(SOCKS_PASSWORD)' \
 		-p 0.0.0.0:9150:9150/tcp \
 		-p 0.0.0.0:5353:8853/udp \
 		$(IMAGE)
@@ -64,6 +70,7 @@ health:
 
 curl-test:
 	curl --fail --silent --show-error --max-time $(HEALTHCHECK_MAX_TIME) \
+		--proxy-user '$(SOCKS_USERNAME):$(SOCKS_PASSWORD)' \
 		--socks5-hostname 127.0.0.1:9150 \
 		$(CURL_TEST_URL)
 
@@ -76,6 +83,8 @@ test: build
 		-e HEALTHCHECK_URL='$(HEALTHCHECK_URL)' \
 		-e HEALTHCHECK_EXPECTED='$(HEALTHCHECK_EXPECTED)' \
 		-e HEALTHCHECK_MAX_TIME='$(HEALTHCHECK_MAX_TIME)' \
+		-e SOCKS_USERNAME='$(SOCKS_USERNAME)' \
+		-e SOCKS_PASSWORD='$(SOCKS_PASSWORD)' \
 		$(IMAGE) >/dev/null; \
 	trap 'status=$$?; if [ $$status -ne 0 ]; then docker logs --tail=100 $(TEST_CONTAINER) || true; fi; docker rm -f $(TEST_CONTAINER) >/dev/null 2>&1 || true; exit $$status' EXIT; \
 	for attempt in $$(seq 1 $(TEST_RETRIES)); do \
