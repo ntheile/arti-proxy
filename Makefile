@@ -13,12 +13,13 @@ CURL_TEST_URL ?= https://check.torproject.org/api/ip
 export SOCKS_USERNAME
 export SOCKS_PASSWORD
 
-.PHONY: help build run stop restart logs health curl-test test compose-up compose-down clean
+.PHONY: help build run run-with-dns stop restart logs health curl-test test compose-up compose-up-with-dns compose-down clean
 
 help:
 	@printf '%s\n' 'Targets:'
 	@printf '%s\n' '  make build        Build $(IMAGE)'
 	@printf '%s\n' '  make run          Run $(CONTAINER)'
+	@printf '%s\n' '  make run-with-dns Run $(CONTAINER) with public SOCKS and public DNS'
 	@printf '%s\n' '  make stop         Stop and remove $(CONTAINER)'
 	@printf '%s\n' '  make restart      Recreate $(CONTAINER)'
 	@printf '%s\n' '  make logs         Tail container logs'
@@ -26,6 +27,7 @@ help:
 	@printf '%s\n' '  make curl-test    Test the host SOCKS port with curl'
 	@printf '%s\n' '  make test         Build and verify healthcheck in a disposable container'
 	@printf '%s\n' '  make compose-up   Build and start with Docker Compose'
+	@printf '%s\n' '  make compose-up-with-dns Build and start Compose with public DNS'
 	@printf '%s\n' '  make compose-down Stop Docker Compose service'
 	@printf '%s\n' '  make clean        Remove image'
 	@printf '\n'
@@ -70,6 +72,30 @@ run: require-socks-credentials build
 		--log-opt max-file=3 \
 		--env-file "$$env_file" \
 		-p 0.0.0.0:9150:9150/tcp \
+		$(IMAGE)
+
+run-with-dns: require-socks-credentials build
+	docker rm -f $(CONTAINER) >/dev/null 2>&1 || true
+	@env_file=$$(mktemp); \
+	trap 'rm -f "$$env_file"' EXIT; \
+	{ \
+		printf '%s\n' "HEALTHCHECK_URL=$(HEALTHCHECK_URL)"; \
+		printf '%s\n' "HEALTHCHECK_EXPECTED=$(HEALTHCHECK_EXPECTED)"; \
+		printf '%s\n' "HEALTHCHECK_MAX_TIME=$(HEALTHCHECK_MAX_TIME)"; \
+		printf '%s\n' "SOCKS_USERNAME=$$SOCKS_USERNAME"; \
+		printf '%s\n' "SOCKS_PASSWORD=$$SOCKS_PASSWORD"; \
+		printf '%s\n' "DNS_LISTEN=0.0.0.0:8853"; \
+	} > "$$env_file"; \
+	docker run -d \
+		--platform $(PLATFORM) \
+		--restart=always \
+		--name $(CONTAINER) \
+		--log-driver=local \
+		--log-opt max-size=10m \
+		--log-opt max-file=3 \
+		--env-file "$$env_file" \
+		-p 0.0.0.0:9150:9150/tcp \
+		-p 0.0.0.0:5353:8853/udp \
 		$(IMAGE)
 
 stop:
@@ -129,8 +155,11 @@ test: require-socks-credentials build
 compose-up: require-socks-credentials
 	docker compose up -d --build
 
+compose-up-with-dns: require-socks-credentials
+	docker compose -f docker-compose.yml -f docker-compose.dns.yml up -d --build
+
 compose-down:
-	docker compose down
+	docker compose -f docker-compose.yml -f docker-compose.dns.yml down
 
 clean:
 	docker image rm $(IMAGE) >/dev/null 2>&1 || true

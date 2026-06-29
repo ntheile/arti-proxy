@@ -40,6 +40,12 @@ Or:
 make run SOCKS_PASSWORD='use-a-long-random-password'
 ```
 
+To also expose DNS on UDP `5353`:
+
+```sh
+make run-with-dns SOCKS_USERNAME='arti' SOCKS_PASSWORD='use-a-long-random-password'
+```
+
 Or with Compose:
 
 ```sh
@@ -50,6 +56,13 @@ Or:
 
 ```sh
 make compose-up SOCKS_PASSWORD='use-a-long-random-password'
+```
+
+Or with Compose and public DNS:
+
+```sh
+SOCKS_USERNAME='arti' SOCKS_PASSWORD='use-a-long-random-password' \
+  docker compose -f docker-compose.yml -f docker-compose.dns.yml up -d --build
 ```
 
 ## Local test
@@ -165,6 +178,30 @@ docker run -d \
   ghcr.io/ntheile/arti-proxy:latest
 ```
 
+To expose both authenticated SOCKS and DNS on the VM:
+
+```sh
+docker pull ghcr.io/ntheile/arti-proxy:latest
+
+docker rm -f arti-socks-proxy >/dev/null 2>&1 || true
+
+docker run -d \
+  --restart=always \
+  --name arti-socks-proxy \
+  --log-driver=local \
+  --log-opt max-size=10m \
+  --log-opt max-file=3 \
+  -e SOCKS_USERNAME='arti' \
+  -e SOCKS_PASSWORD='use-a-long-random-password' \
+  -e DNS_LISTEN='0.0.0.0:8853' \
+  -e HEALTHCHECK_URL='https://check.torproject.org/api/ip' \
+  -e HEALTHCHECK_EXPECTED='"IsTor":true' \
+  -e HEALTHCHECK_MAX_TIME=30 \
+  -p 0.0.0.0:9150:9150/tcp \
+  -p 0.0.0.0:5353:8853/udp \
+  ghcr.io/ntheile/arti-proxy:latest
+```
+
 On an Apple Silicon Mac, run the amd64 image explicitly:
 
 ```sh
@@ -238,13 +275,13 @@ curl --fail --silent --show-error --max-time 30 \
   https://check.torproject.org/api/ip
 ```
 
-## DNS is opt-in
+## DNS
 
 The safe default exposes only the authenticated SOCKS5 listener on `PUBLIC_SOCKS_PORT` (`9150`). The `docker-entrypoint.sh` DNS default is `DNS_LISTEN='127.0.0.1:8853'`, and the default Docker/Compose examples do not publish UDP DNS.
 
 The healthcheck uses Arti's internal SOCKS listener (`SOCKS_HOST` / `SOCKS_PORT`) and does not require public DNS.
 
-DNS on UDP `5353` does not support username/password authentication. If you explicitly need public DNS, opt in with both a public `DNS_LISTEN` value and a UDP port mapping:
+DNS on UDP `5353` does not support username/password authentication. If you need public DNS, opt in with both a public `DNS_LISTEN` value and a UDP port mapping:
 
 ```sh
 docker run -d \
@@ -259,6 +296,19 @@ docker run -d \
 ```
 
 Protect public DNS with a cloud firewall, host firewall, VPN, or similar network control.
+
+With Make:
+
+```sh
+make run-with-dns SOCKS_USERNAME='arti' SOCKS_PASSWORD='use-a-long-random-password'
+```
+
+With Compose:
+
+```sh
+SOCKS_USERNAME='arti' SOCKS_PASSWORD='use-a-long-random-password' \
+  docker compose -f docker-compose.yml -f docker-compose.dns.yml up -d --build
+```
 
 ## Healthcheck settings
 
