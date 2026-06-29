@@ -1,13 +1,25 @@
 FROM containers.torproject.org/tpo/onion-services/onimages/arti@sha256:852d7a334d99e00875924a0d33288e75a897ca2196bcd649c951b9a1158ac38b
 
 USER root
-RUN apk add --no-cache curl
+RUN apk add --no-cache curl python3
 
 COPY arti-healthcheck.sh /usr/local/bin/arti-healthcheck.sh
-RUN chmod +x /usr/local/bin/arti-healthcheck.sh
+COPY auth-socks5-proxy.py /usr/local/bin/auth-socks5-proxy.py
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x \
+  /usr/local/bin/arti-healthcheck.sh \
+  /usr/local/bin/auth-socks5-proxy.py \
+  /usr/local/bin/docker-entrypoint.sh
 
 ENV SOCKS_HOST=127.0.0.1
-ENV SOCKS_PORT=9150
+ENV SOCKS_PORT=9151
+ENV PUBLIC_SOCKS_HOST=0.0.0.0
+ENV PUBLIC_SOCKS_PORT=9150
+ENV ARTI_SOCKS_HOST=127.0.0.1
+ENV ARTI_SOCKS_PORT=9151
+ENV SOCKS_HANDSHAKE_TIMEOUT=15
+ENV UPSTREAM_CONNECT_RETRIES=3
+ENV UPSTREAM_CONNECT_RETRY_DELAY=1
 ENV HEALTHCHECK_URL=https://check.torproject.org/api/ip
 ENV HEALTHCHECK_EXPECTED='"IsTor":true'
 ENV HEALTHCHECK_MAX_TIME=30
@@ -16,5 +28,4 @@ HEALTHCHECK --interval=2m --timeout=35s --start-period=2m --retries=2 \
   CMD /usr/local/bin/arti-healthcheck.sh
 
 USER arti
-ENTRYPOINT ["arti"]
-CMD ["proxy", "-o", "proxy.socks_listen=\"0.0.0.0:9150\"", "-o", "proxy.dns_listen=\"0.0.0.0:8853\""]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
