@@ -11,15 +11,32 @@ UPSTREAM_SOCKS_PORT = int(os.environ.get("UPSTREAM_SOCKS_PORT", "9151"))
 SOCKS_USERNAME = os.environ.get("SOCKS_USERNAME")
 SOCKS_PASSWORD = os.environ.get("SOCKS_PASSWORD")
 SOCKS_HANDSHAKE_TIMEOUT = float(os.environ.get("SOCKS_HANDSHAKE_TIMEOUT", "15"))
+UPSTREAM_CONNECT_RETRIES = int(os.environ.get("UPSTREAM_CONNECT_RETRIES", "3"))
+UPSTREAM_CONNECT_RETRY_DELAY = float(os.environ.get("UPSTREAM_CONNECT_RETRY_DELAY", "1"))
 
 NO_ACCEPTABLE_METHODS = b"\x05\xff"
 USERNAME_PASSWORD_METHOD = 0x02
 AUTH_SUCCESS = b"\x01\x00"
 AUTH_FAILURE = b"\x01\x01"
+SOCKS_STATUS_MESSAGES = {
+    1: "general SOCKS server failure",
+    2: "connection not allowed by ruleset",
+    3: "network unreachable",
+    4: "host unreachable",
+    5: "connection refused",
+    6: "ttl expired",
+    7: "command not supported",
+    8: "address type not supported",
+}
+RETRYABLE_UPSTREAM_STATUSES = {1, 3, 4, 5, 6}
 
 
 class SocksError(Exception):
     pass
+
+
+def upstream_status_message(status):
+    return SOCKS_STATUS_MESSAGES.get(status, "unknown failure")
 
 
 async def close_writer(writer):
@@ -131,6 +148,39 @@ async def open_upstream(request_address):
         raise
 
 
+async def open_upstream_with_retries(request_address):
+    last_exc = None
+    attempts = max(1, UPSTREAM_CONNECT_RETRIES)
+    for attempt in range(1, attempts + 1):
+        try:
+            status, reply, reader, writer = await open_upstream(request_address)
+        except Exception as exc:
+            last_exc = exc
+            if attempt >= attempts:
+                raise
+            print(
+                f"upstream SOCKS attempt {attempt}/{attempts} failed: {exc}; retrying",
+                file=sys.stderr,
+                flush=True,
+            )
+        else:
+            if status == 0:
+                return status, reply, reader, writer
+            if status not in RETRYABLE_UPSTREAM_STATUSES or attempt >= attempts:
+                return status, reply, reader, writer
+            message = upstream_status_message(status)
+            print(
+                f"upstream SOCKS attempt {attempt}/{attempts} failed with status {status} ({message}); retrying",
+                file=sys.stderr,
+                flush=True,
+            )
+            await close_writer(writer)
+
+        await asyncio.sleep(UPSTREAM_CONNECT_RETRY_DELAY)
+
+    raise last_exc or SocksError("upstream SOCKS connection failed")
+
+
 async def relay(reader, writer):
     try:
         while data := await reader.read(65536):
@@ -147,11 +197,12 @@ async def handle_client(client_reader, client_writer):
         async with asyncio.timeout(SOCKS_HANDSHAKE_TIMEOUT):
             await authenticate(client_reader, client_writer)
             request_address = await read_request(client_reader)
-            status, upstream_reply, upstream_reader, upstream_writer = await open_upstream(request_address)
+            status, upstream_reply, upstream_reader, upstream_writer = await open_upstream_with_retries(request_address)
         client_writer.write(upstream_reply)
         await client_writer.drain()
         if status != 0:
-            raise SocksError(f"upstream connection failed with status {status}")
+            message = upstream_status_message(status)
+            raise SocksError(f"upstream connection failed with status {status} ({message})")
 
         await asyncio.gather(
             relay(client_reader, upstream_writer),

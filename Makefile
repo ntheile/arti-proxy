@@ -9,6 +9,9 @@ HEALTHCHECK_MAX_TIME ?= 30
 TEST_RETRIES ?= 24
 TEST_SLEEP ?= 5
 CURL_TEST_URL ?= https://check.torproject.org/api/ip
+CURL_TEST_HOST ?= 127.0.0.1
+CURL_TEST_PORT ?= 9150
+CURL_TEST_VERBOSE ?= 0
 
 export SOCKS_USERNAME
 export SOCKS_PASSWORD
@@ -38,6 +41,8 @@ help:
 	@printf '%s\n' '  SOCKS_PASSWORD=<hidden>'
 	@printf '%s\n' '  HEALTHCHECK_URL=$(HEALTHCHECK_URL)'
 	@printf '%s\n' '  HEALTHCHECK_EXPECTED=$(HEALTHCHECK_EXPECTED)'
+	@printf '%s\n' '  CURL_TEST_HOST=$(CURL_TEST_HOST)'
+	@printf '%s\n' '  CURL_TEST_PORT=$(CURL_TEST_PORT)'
 
 require-socks-credentials:
 	@if [ -z "$$SOCKS_USERNAME" ]; then \
@@ -57,9 +62,9 @@ run: require-socks-credentials build
 	@env_file=$$(mktemp); \
 	trap 'rm -f "$$env_file"' EXIT; \
 	{ \
-		printf '%s\n' "HEALTHCHECK_URL=$(HEALTHCHECK_URL)"; \
-		printf '%s\n' "HEALTHCHECK_EXPECTED=$(HEALTHCHECK_EXPECTED)"; \
-		printf '%s\n' "HEALTHCHECK_MAX_TIME=$(HEALTHCHECK_MAX_TIME)"; \
+		printf '%s\n' 'HEALTHCHECK_URL=$(HEALTHCHECK_URL)'; \
+		printf '%s\n' 'HEALTHCHECK_EXPECTED=$(HEALTHCHECK_EXPECTED)'; \
+		printf '%s\n' 'HEALTHCHECK_MAX_TIME=$(HEALTHCHECK_MAX_TIME)'; \
 		printf '%s\n' "SOCKS_USERNAME=$$SOCKS_USERNAME"; \
 		printf '%s\n' "SOCKS_PASSWORD=$$SOCKS_PASSWORD"; \
 	} > "$$env_file"; \
@@ -79,9 +84,9 @@ run-with-dns: require-socks-credentials build
 	@env_file=$$(mktemp); \
 	trap 'rm -f "$$env_file"' EXIT; \
 	{ \
-		printf '%s\n' "HEALTHCHECK_URL=$(HEALTHCHECK_URL)"; \
-		printf '%s\n' "HEALTHCHECK_EXPECTED=$(HEALTHCHECK_EXPECTED)"; \
-		printf '%s\n' "HEALTHCHECK_MAX_TIME=$(HEALTHCHECK_MAX_TIME)"; \
+		printf '%s\n' 'HEALTHCHECK_URL=$(HEALTHCHECK_URL)'; \
+		printf '%s\n' 'HEALTHCHECK_EXPECTED=$(HEALTHCHECK_EXPECTED)'; \
+		printf '%s\n' 'HEALTHCHECK_MAX_TIME=$(HEALTHCHECK_MAX_TIME)'; \
 		printf '%s\n' "SOCKS_USERNAME=$$SOCKS_USERNAME"; \
 		printf '%s\n' "SOCKS_PASSWORD=$$SOCKS_PASSWORD"; \
 		printf '%s\n' "DNS_LISTEN=0.0.0.0:8853"; \
@@ -118,18 +123,23 @@ curl-test:
 		printf '%s\n' 'SOCKS_PASSWORD is required. Example: make curl-test SOCKS_USERNAME=arti SOCKS_PASSWORD=use-a-long-random-password' >&2; \
 		exit 1; \
 	fi
-	@curl --fail --silent --show-error --max-time $(HEALTHCHECK_MAX_TIME) \
+	@set -eu; \
+	curl_flags='--fail --silent --show-error'; \
+	if [ "$(CURL_TEST_VERBOSE)" = "1" ]; then \
+		curl_flags='--fail --show-error --verbose'; \
+	fi; \
+	curl $$curl_flags --max-time $(HEALTHCHECK_MAX_TIME) \
 		--proxy-user "$$SOCKS_USERNAME:$$SOCKS_PASSWORD" \
-		--socks5-hostname 127.0.0.1:9150 \
-		$(CURL_TEST_URL)
+		--socks5-hostname "$(CURL_TEST_HOST):$(CURL_TEST_PORT)" \
+		"$(CURL_TEST_URL)"
 
 test: require-socks-credentials build
 	@set -eu; \
 	env_file=$$(mktemp); \
 	{ \
-		printf '%s\n' "HEALTHCHECK_URL=$(HEALTHCHECK_URL)"; \
-		printf '%s\n' "HEALTHCHECK_EXPECTED=$(HEALTHCHECK_EXPECTED)"; \
-		printf '%s\n' "HEALTHCHECK_MAX_TIME=$(HEALTHCHECK_MAX_TIME)"; \
+		printf '%s\n' 'HEALTHCHECK_URL=$(HEALTHCHECK_URL)'; \
+		printf '%s\n' 'HEALTHCHECK_EXPECTED=$(HEALTHCHECK_EXPECTED)'; \
+		printf '%s\n' 'HEALTHCHECK_MAX_TIME=$(HEALTHCHECK_MAX_TIME)'; \
 		printf '%s\n' "SOCKS_USERNAME=$$SOCKS_USERNAME"; \
 		printf '%s\n' "SOCKS_PASSWORD=$$SOCKS_PASSWORD"; \
 	} > "$$env_file"; \

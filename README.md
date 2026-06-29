@@ -4,6 +4,8 @@ Custom Arti SOCKS/DNS proxy image with a Docker healthcheck that verifies an end
 
 The public SOCKS5 listener requires username/password authentication. Internally, the authenticated listener forwards traffic to Arti's localhost-only SOCKS listener.
 
+The authenticated listener retries transient Arti upstream SOCKS connection failures before returning an error to the client.
+
 ## Build
 
 ```sh
@@ -255,7 +257,7 @@ Set `SOCKS_USERNAME` and `SOCKS_PASSWORD` when running the container. The contai
 Test the authenticated SOCKS proxy from the host:
 
 ```sh
-curl --fail --silent --show-error --max-time 30 \
+curl --fail --show-error --verbose --max-time 30 \
   --proxy-user 'arti:use-a-long-random-password' \
   --socks5-hostname 127.0.0.1:9150 \
   https://check.torproject.org/api/ip
@@ -270,10 +272,20 @@ Expected response:
 Remote test:
 
 ```sh
-curl --fail --silent --show-error --max-time 30 \
+curl --fail --show-error --verbose --max-time 30 \
   --proxy-user 'arti:use-a-long-random-password' \
   --socks5-hostname 174.138.126.205:9150 \
   https://check.torproject.org/api/ip
+```
+
+Or use the Make target:
+
+```sh
+make curl-test \
+  SOCKS_USERNAME='arti' \
+  SOCKS_PASSWORD='use-a-long-random-password' \
+  CURL_TEST_HOST='174.138.126.205' \
+  CURL_TEST_VERBOSE=1
 ```
 
 ## DNS
@@ -324,6 +336,8 @@ SOCKS_USERNAME='arti' SOCKS_PASSWORD='use-a-long-random-password' \
 | `SOCKS_PORT` | `9151` | Internal Arti SOCKS listener used by the healthcheck. |
 | `PUBLIC_SOCKS_PORT` | `9150` | Public authenticated SOCKS5 listener. |
 | `SOCKS_HANDSHAKE_TIMEOUT` | `15` | Seconds allowed for SOCKS auth, request parsing, and upstream SOCKS setup before the client is disconnected. |
+| `UPSTREAM_CONNECT_RETRIES` | `3` | Arti upstream SOCKS connection attempts before the authenticated listener returns an error to the client. |
+| `UPSTREAM_CONNECT_RETRY_DELAY` | `1` | Seconds to wait between upstream SOCKS connection attempts. |
 | `DNS_LISTEN` | `127.0.0.1:8853` | Internal Arti DNS listener. Set to `0.0.0.0:8853` only when intentionally exposing DNS. |
 
 ## Verify
@@ -336,7 +350,7 @@ docker exec arti-socks-proxy /usr/local/bin/arti-healthcheck.sh
 Manual Tor check from the host:
 
 ```sh
-curl --fail --silent --show-error --max-time 30 \
+curl --fail --show-error --verbose --max-time 30 \
   --proxy-user 'arti:use-a-long-random-password' \
   --socks5-hostname 127.0.0.1:9150 \
   https://check.torproject.org/api/ip
@@ -345,5 +359,5 @@ curl --fail --silent --show-error --max-time 30 \
 Or:
 
 ```sh
-make curl-test
+make curl-test SOCKS_USERNAME='arti' SOCKS_PASSWORD='use-a-long-random-password'
 ```
