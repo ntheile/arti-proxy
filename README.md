@@ -26,31 +26,30 @@ docker run -d \
   --log-opt max-size=10m \
   --log-opt max-file=3 \
   -e SOCKS_USERNAME='arti' \
-  -e SOCKS_PASSWORD='change-me' \
+  -e SOCKS_PASSWORD='use-a-long-random-password' \
   -e HEALTHCHECK_URL='https://check.torproject.org/api/ip' \
   -e HEALTHCHECK_EXPECTED='"IsTor":true' \
   -e HEALTHCHECK_MAX_TIME=30 \
   -p 0.0.0.0:9150:9150/tcp \
-  -p 0.0.0.0:5353:8853/udp \
   ghcr.io/ntheile/arti-proxy:latest
 ```
 
 Or:
 
 ```sh
-make run
+make run SOCKS_PASSWORD='use-a-long-random-password'
 ```
 
 Or with Compose:
 
 ```sh
-docker compose up -d --build
+SOCKS_PASSWORD='use-a-long-random-password' docker compose up -d --build
 ```
 
 Or:
 
 ```sh
-make compose-up
+make compose-up SOCKS_PASSWORD='use-a-long-random-password'
 ```
 
 ## Local test
@@ -58,13 +57,13 @@ make compose-up
 Build the image, run a disposable Arti container, wait for bootstrap, and execute the healthcheck:
 
 ```sh
-make test
+make test SOCKS_PASSWORD='use-a-long-random-password'
 ```
 
 To test a different endpoint:
 
 ```sh
-make test HEALTHCHECK_URL='https://example.com' HEALTHCHECK_EXPECTED=''
+make test SOCKS_PASSWORD='use-a-long-random-password' HEALTHCHECK_URL='https://example.com' HEALTHCHECK_EXPECTED=''
 ```
 
 ## Publish to GitHub Container Registry
@@ -163,7 +162,6 @@ docker run -d \
   -e HEALTHCHECK_EXPECTED='"IsTor":true' \
   -e HEALTHCHECK_MAX_TIME=30 \
   -p 0.0.0.0:9150:9150/tcp \
-  -p 0.0.0.0:5353:8853/udp \
   ghcr.io/ntheile/arti-proxy:latest
 ```
 
@@ -180,12 +178,11 @@ docker run -d \
   --log-opt max-size=10m \
   --log-opt max-file=3 \
   -e SOCKS_USERNAME='arti' \
-  -e SOCKS_PASSWORD='change-me' \
+  -e SOCKS_PASSWORD='use-a-long-random-password' \
   -e HEALTHCHECK_URL='https://check.torproject.org/api/ip' \
   -e HEALTHCHECK_EXPECTED='"IsTor":true' \
   -e HEALTHCHECK_MAX_TIME=30 \
   -p 0.0.0.0:9150:9150/tcp \
-  -p 0.0.0.0:5353:8853/udp \
   ghcr.io/ntheile/arti-proxy:latest
 ```
 
@@ -221,7 +218,7 @@ Test the authenticated SOCKS proxy from the host:
 
 ```sh
 curl --fail --silent --show-error --max-time 30 \
-  --proxy-user 'arti:change-me' \
+  --proxy-user 'arti:use-a-long-random-password' \
   --socks5-hostname 127.0.0.1:9150 \
   https://check.torproject.org/api/ip
 ```
@@ -241,7 +238,27 @@ curl --fail --silent --show-error --max-time 30 \
   https://check.torproject.org/api/ip
 ```
 
-DNS on UDP `5353` does not support username/password authentication. If you expose DNS publicly, protect it with a cloud firewall, host firewall, VPN, or do not expose it.
+## DNS is opt-in
+
+The safe default exposes only the authenticated SOCKS5 listener on `PUBLIC_SOCKS_PORT` (`9150`). The `docker-entrypoint.sh` DNS default is `DNS_LISTEN='127.0.0.1:8853'`, and the default Docker/Compose examples do not publish UDP DNS.
+
+The healthcheck uses Arti's internal SOCKS listener (`SOCKS_HOST` / `SOCKS_PORT`) and does not require public DNS.
+
+DNS on UDP `5353` does not support username/password authentication. If you explicitly need public DNS, opt in with both a public `DNS_LISTEN` value and a UDP port mapping:
+
+```sh
+docker run -d \
+  --restart=always \
+  --name arti-socks-proxy \
+  -e SOCKS_USERNAME='arti' \
+  -e SOCKS_PASSWORD='use-a-long-random-password' \
+  -e DNS_LISTEN='0.0.0.0:8853' \
+  -p 0.0.0.0:9150:9150/tcp \
+  -p 0.0.0.0:5353:8853/udp \
+  ghcr.io/ntheile/arti-proxy:latest
+```
+
+Protect public DNS with a cloud firewall, host firewall, VPN, or similar network control.
 
 ## Healthcheck settings
 
@@ -255,6 +272,8 @@ DNS on UDP `5353` does not support username/password authentication. If you expo
 | `SOCKS_HOST` | `127.0.0.1` | Hostname or IP for the local SOCKS listener inside the container. |
 | `SOCKS_PORT` | `9151` | Internal Arti SOCKS listener used by the healthcheck. |
 | `PUBLIC_SOCKS_PORT` | `9150` | Public authenticated SOCKS5 listener. |
+| `SOCKS_HANDSHAKE_TIMEOUT` | `15` | Seconds allowed for SOCKS auth, request parsing, and upstream SOCKS setup before the client is disconnected. |
+| `DNS_LISTEN` | `127.0.0.1:8853` | Internal Arti DNS listener. Set to `0.0.0.0:8853` only when intentionally exposing DNS. |
 
 ## Verify
 
@@ -267,7 +286,7 @@ Manual Tor check from the host:
 
 ```sh
 curl --fail --silent --show-error --max-time 30 \
-  --proxy-user 'arti:change-me' \
+  --proxy-user 'arti:use-a-long-random-password' \
   --socks5-hostname 127.0.0.1:9150 \
   https://check.torproject.org/api/ip
 ```

@@ -6,11 +6,12 @@ PLATFORM ?= linux/amd64
 HEALTHCHECK_URL ?= https://check.torproject.org/api/ip
 HEALTHCHECK_EXPECTED ?= "IsTor":true
 HEALTHCHECK_MAX_TIME ?= 30
-SOCKS_USERNAME ?= arti
-SOCKS_PASSWORD ?= change-me
 TEST_RETRIES ?= 24
 TEST_SLEEP ?= 5
 CURL_TEST_URL ?= https://check.torproject.org/api/ip
+
+export SOCKS_USERNAME
+export SOCKS_PASSWORD
 
 .PHONY: help build run stop restart logs health curl-test test compose-up compose-down clean
 
@@ -36,11 +37,30 @@ help:
 	@printf '%s\n' '  HEALTHCHECK_URL=$(HEALTHCHECK_URL)'
 	@printf '%s\n' '  HEALTHCHECK_EXPECTED=$(HEALTHCHECK_EXPECTED)'
 
+require-socks-credentials:
+	@if [ -z "$$SOCKS_USERNAME" ]; then \
+		printf '%s\n' 'SOCKS_USERNAME is required. Example: make run SOCKS_USERNAME=arti SOCKS_PASSWORD=use-a-long-random-password' >&2; \
+		exit 1; \
+	fi
+	@if [ -z "$$SOCKS_PASSWORD" ]; then \
+		printf '%s\n' 'SOCKS_PASSWORD is required. Example: make run SOCKS_USERNAME=arti SOCKS_PASSWORD=use-a-long-random-password' >&2; \
+		exit 1; \
+	fi
+
 build:
 	docker build --platform $(PLATFORM) -t $(IMAGE) .
 
-run: build
+run: require-socks-credentials build
 	docker rm -f $(CONTAINER) >/dev/null 2>&1 || true
+	@env_file=$$(mktemp); \
+	trap 'rm -f "$$env_file"' EXIT; \
+	{ \
+		printf '%s\n' "HEALTHCHECK_URL=$(HEALTHCHECK_URL)"; \
+		printf '%s\n' "HEALTHCHECK_EXPECTED=$(HEALTHCHECK_EXPECTED)"; \
+		printf '%s\n' "HEALTHCHECK_MAX_TIME=$(HEALTHCHECK_MAX_TIME)"; \
+		printf '%s\n' "SOCKS_USERNAME=$$SOCKS_USERNAME"; \
+		printf '%s\n' "SOCKS_PASSWORD=$$SOCKS_PASSWORD"; \
+	} > "$$env_file"; \
 	docker run -d \
 		--platform $(PLATFORM) \
 		--restart=always \
@@ -48,13 +68,8 @@ run: build
 		--log-driver=local \
 		--log-opt max-size=10m \
 		--log-opt max-file=3 \
-		-e HEALTHCHECK_URL='$(HEALTHCHECK_URL)' \
-		-e HEALTHCHECK_EXPECTED='$(HEALTHCHECK_EXPECTED)' \
-		-e HEALTHCHECK_MAX_TIME='$(HEALTHCHECK_MAX_TIME)' \
-		-e SOCKS_USERNAME='$(SOCKS_USERNAME)' \
-		-e SOCKS_PASSWORD='$(SOCKS_PASSWORD)' \
+		--env-file "$$env_file" \
 		-p 0.0.0.0:9150:9150/tcp \
-		-p 0.0.0.0:5353:8853/udp \
 		$(IMAGE)
 
 stop:
@@ -69,24 +84,36 @@ health:
 	docker inspect $(CONTAINER) --format '{{json .State.Health}}'
 
 curl-test:
-	curl --fail --silent --show-error --max-time $(HEALTHCHECK_MAX_TIME) \
-		--proxy-user '$(SOCKS_USERNAME):$(SOCKS_PASSWORD)' \
+	@if [ -z "$$SOCKS_USERNAME" ]; then \
+		printf '%s\n' 'SOCKS_USERNAME is required. Example: make curl-test SOCKS_USERNAME=arti SOCKS_PASSWORD=use-a-long-random-password' >&2; \
+		exit 1; \
+	fi
+	@if [ -z "$$SOCKS_PASSWORD" ]; then \
+		printf '%s\n' 'SOCKS_PASSWORD is required. Example: make curl-test SOCKS_USERNAME=arti SOCKS_PASSWORD=use-a-long-random-password' >&2; \
+		exit 1; \
+	fi
+	@curl --fail --silent --show-error --max-time $(HEALTHCHECK_MAX_TIME) \
+		--proxy-user "$$SOCKS_USERNAME:$$SOCKS_PASSWORD" \
 		--socks5-hostname 127.0.0.1:9150 \
 		$(CURL_TEST_URL)
 
-test: build
+test: require-socks-credentials build
 	@set -eu; \
+	env_file=$$(mktemp); \
+	{ \
+		printf '%s\n' "HEALTHCHECK_URL=$(HEALTHCHECK_URL)"; \
+		printf '%s\n' "HEALTHCHECK_EXPECTED=$(HEALTHCHECK_EXPECTED)"; \
+		printf '%s\n' "HEALTHCHECK_MAX_TIME=$(HEALTHCHECK_MAX_TIME)"; \
+		printf '%s\n' "SOCKS_USERNAME=$$SOCKS_USERNAME"; \
+		printf '%s\n' "SOCKS_PASSWORD=$$SOCKS_PASSWORD"; \
+	} > "$$env_file"; \
 	docker rm -f $(TEST_CONTAINER) >/dev/null 2>&1 || true; \
 	docker run -d \
 		--platform $(PLATFORM) \
 		--name $(TEST_CONTAINER) \
-		-e HEALTHCHECK_URL='$(HEALTHCHECK_URL)' \
-		-e HEALTHCHECK_EXPECTED='$(HEALTHCHECK_EXPECTED)' \
-		-e HEALTHCHECK_MAX_TIME='$(HEALTHCHECK_MAX_TIME)' \
-		-e SOCKS_USERNAME='$(SOCKS_USERNAME)' \
-		-e SOCKS_PASSWORD='$(SOCKS_PASSWORD)' \
+		--env-file "$$env_file" \
 		$(IMAGE) >/dev/null; \
-	trap 'status=$$?; if [ $$status -ne 0 ]; then docker logs --tail=100 $(TEST_CONTAINER) || true; fi; docker rm -f $(TEST_CONTAINER) >/dev/null 2>&1 || true; exit $$status' EXIT; \
+	trap 'status=$$?; rm -f "$$env_file"; if [ $$status -ne 0 ]; then docker logs --tail=100 $(TEST_CONTAINER) || true; fi; docker rm -f $(TEST_CONTAINER) >/dev/null 2>&1 || true; exit $$status' EXIT; \
 	for attempt in $$(seq 1 $(TEST_RETRIES)); do \
 		if docker exec $(TEST_CONTAINER) /usr/local/bin/arti-healthcheck.sh >/dev/null 2>&1; then \
 			echo "Healthcheck passed on attempt $$attempt"; \
@@ -99,7 +126,7 @@ test: build
 	echo "Healthcheck failed after $(TEST_RETRIES) attempts"; \
 	exit 1
 
-compose-up:
+compose-up: require-socks-credentials
 	docker compose up -d --build
 
 compose-down:

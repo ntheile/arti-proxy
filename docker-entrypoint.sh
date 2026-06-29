@@ -8,14 +8,15 @@ fi
 
 ARTI_SOCKS_HOST="${ARTI_SOCKS_HOST:-127.0.0.1}"
 ARTI_SOCKS_PORT="${ARTI_SOCKS_PORT:-9151}"
-DNS_LISTEN="${DNS_LISTEN:-0.0.0.0:8853}"
+DNS_LISTEN="${DNS_LISTEN:-127.0.0.1:8853}"
 
 export UPSTREAM_SOCKS_HOST="$ARTI_SOCKS_HOST"
 export UPSTREAM_SOCKS_PORT="$ARTI_SOCKS_PORT"
 
 arti proxy \
   -o "proxy.socks_listen=\"$ARTI_SOCKS_HOST:$ARTI_SOCKS_PORT\"" \
-  -o "proxy.dns_listen=\"$DNS_LISTEN\"" &
+  -o "proxy.dns_listen=\"$DNS_LISTEN\"" \
+  "$@" &
 arti_pid="$!"
 
 python3 /usr/local/bin/auth-socks5-proxy.py &

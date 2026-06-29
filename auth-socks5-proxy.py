@@ -10,6 +10,7 @@ UPSTREAM_SOCKS_HOST = os.environ.get("UPSTREAM_SOCKS_HOST", "127.0.0.1")
 UPSTREAM_SOCKS_PORT = int(os.environ.get("UPSTREAM_SOCKS_PORT", "9151"))
 SOCKS_USERNAME = os.environ.get("SOCKS_USERNAME")
 SOCKS_PASSWORD = os.environ.get("SOCKS_PASSWORD")
+SOCKS_HANDSHAKE_TIMEOUT = float(os.environ.get("SOCKS_HANDSHAKE_TIMEOUT", "15"))
 
 NO_ACCEPTABLE_METHODS = b"\x05\xff"
 USERNAME_PASSWORD_METHOD = 0x02
@@ -19,6 +20,16 @@ AUTH_FAILURE = b"\x01\x01"
 
 class SocksError(Exception):
     pass
+
+
+async def close_writer(writer):
+    if not writer:
+        return
+    writer.close()
+    try:
+        await writer.wait_closed()
+    except Exception:
+        pass
 
 
 async def read_exactly(reader, size):
@@ -87,33 +98,37 @@ async def read_request(reader):
 
 async def open_upstream(request_address):
     reader, writer = await asyncio.open_connection(UPSTREAM_SOCKS_HOST, UPSTREAM_SOCKS_PORT)
-    writer.write(b"\x05\x01\x00")
-    await writer.drain()
+    try:
+        writer.write(b"\x05\x01\x00")
+        await writer.drain()
 
-    response = await read_exactly(reader, 2)
-    if response != b"\x05\x00":
-        raise SocksError("upstream SOCKS rejected no-auth handshake")
+        response = await read_exactly(reader, 2)
+        if response != b"\x05\x00":
+            raise SocksError("upstream SOCKS rejected no-auth handshake")
 
-    writer.write(b"\x05\x01\x00" + request_address)
-    await writer.drain()
+        writer.write(b"\x05\x01\x00" + request_address)
+        await writer.drain()
 
-    reply_header = await read_exactly(reader, 4)
-    version, status, reserved, address_type = reply_header
-    if version != 5 or reserved != 0:
-        raise SocksError("invalid upstream reply")
+        reply_header = await read_exactly(reader, 4)
+        version, status, reserved, address_type = reply_header
+        if version != 5 or reserved != 0:
+            raise SocksError("invalid upstream reply")
 
-    if address_type == 1:
-        bind_address = await read_exactly(reader, 4)
-    elif address_type == 3:
-        length = await read_exactly(reader, 1)
-        bind_address = length + await read_exactly(reader, length[0])
-    elif address_type == 4:
-        bind_address = await read_exactly(reader, 16)
-    else:
-        raise SocksError("unsupported upstream bind address type")
+        if address_type == 1:
+            bind_address = await read_exactly(reader, 4)
+        elif address_type == 3:
+            length = await read_exactly(reader, 1)
+            bind_address = length + await read_exactly(reader, length[0])
+        elif address_type == 4:
+            bind_address = await read_exactly(reader, 16)
+        else:
+            raise SocksError("unsupported upstream bind address type")
 
-    bind_port = await read_exactly(reader, 2)
-    return status, reply_header + bind_address + bind_port, reader, writer
+        bind_port = await read_exactly(reader, 2)
+        return status, reply_header + bind_address + bind_port, reader, writer
+    except BaseException:
+        await close_writer(writer)
+        raise
 
 
 async def relay(reader, writer):
@@ -122,16 +137,17 @@ async def relay(reader, writer):
             writer.write(data)
             await writer.drain()
     finally:
-        writer.close()
+        await close_writer(writer)
 
 
 async def handle_client(client_reader, client_writer):
     peer = client_writer.get_extra_info("peername")
     upstream_writer = None
     try:
-        await authenticate(client_reader, client_writer)
-        request_address = await read_request(client_reader)
-        status, upstream_reply, upstream_reader, upstream_writer = await open_upstream(request_address)
+        async with asyncio.timeout(SOCKS_HANDSHAKE_TIMEOUT):
+            await authenticate(client_reader, client_writer)
+            request_address = await read_request(client_reader)
+            status, upstream_reply, upstream_reader, upstream_writer = await open_upstream(request_address)
         client_writer.write(upstream_reply)
         await client_writer.drain()
         if status != 0:
@@ -141,12 +157,13 @@ async def handle_client(client_reader, client_writer):
             relay(client_reader, upstream_writer),
             relay(upstream_reader, client_writer),
         )
+    except TimeoutError:
+        print(f"SOCKS connection from {peer} closed: handshake timed out", file=sys.stderr, flush=True)
     except Exception as exc:
         print(f"SOCKS connection from {peer} closed: {exc}", file=sys.stderr, flush=True)
     finally:
-        if upstream_writer:
-            upstream_writer.close()
-        client_writer.close()
+        await close_writer(upstream_writer)
+        await close_writer(client_writer)
 
 
 async def main():
