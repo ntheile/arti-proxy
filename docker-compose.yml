@@ -2,7 +2,7 @@ services:
   arti-socks-proxy:
     build:
       context: .
-    image: local/arti-socks-proxy:latest
+    image: ghcr.io/ntheile/arti-proxy:latest
     platform: linux/amd64
     container_name: arti-socks-proxy
     restart: always

@@ -1,4 +1,4 @@
-IMAGE ?= local/arti-socks-proxy:latest
+IMAGE ?= ghcr.io/ntheile/arti-proxy:latest
 CONTAINER ?= arti-socks-proxy
 TEST_CONTAINER ?= arti-socks-proxy-test
 PLATFORM ?= linux/amd64
@@ -24,7 +24,7 @@ help:
 	@printf '%s\n' '  make test         Build and verify healthcheck in a disposable container'
 	@printf '%s\n' '  make compose-up   Build and start with Docker Compose'
 	@printf '%s\n' '  make compose-down Stop Docker Compose service'
-	@printf '%s\n' '  make clean        Remove local image'
+	@printf '%s\n' '  make clean        Remove image'
 	@printf '\n'
 	@printf '%s\n' 'Overrides:'
 	@printf '%s\n' '  IMAGE=$(IMAGE)'

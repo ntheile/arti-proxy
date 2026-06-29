@@ -5,7 +5,7 @@ Custom Arti SOCKS/DNS proxy image with a Docker healthcheck that verifies an end
 ## Build
 
 ```sh
-docker build -t local/arti-socks-proxy:latest .
+docker build --platform linux/amd64 -t ghcr.io/ntheile/arti-proxy:latest .
 ```
 
 Or:
@@ -28,7 +28,7 @@ docker run -d \
   -e HEALTHCHECK_MAX_TIME=30 \
   -p 0.0.0.0:9150:9150/tcp \
   -p 0.0.0.0:5353:8853/udp \
-  local/arti-socks-proxy:latest
+  ghcr.io/ntheile/arti-proxy:latest
 ```
 
 Or:
