@@ -71,14 +71,14 @@ Assuming this project lives at `github.com/ntheile/arti-proxy`, publish the Dock
 ghcr.io/ntheile/arti-proxy:latest
 ```
 
-Create `.github/workflows/publish-image.yml`:
+This repository includes `.github/workflows/publish-image.yml`:
 
 ```yaml
 name: Publish Docker image
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
     tags: ["v*"]
   workflow_dispatch:
 
@@ -118,7 +118,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
 ```
 
-Push to `main`, or run the workflow manually from GitHub Actions. After it completes, the image should be available from GHCR.
+Push to the default branch, or run the workflow manually from GitHub Actions. After it completes, the image should be available from GHCR.
 
 The pinned Tor Arti base image used by this project is `linux/amd64`, so the published image is built as `linux/amd64`. Use a normal amd64 VM, which is the default for most DigitalOcean droplets.
 
@@ -167,6 +167,15 @@ If the GitHub package is private, log in to GHCR first with a GitHub personal ac
 echo "$GITHUB_PAT" | docker login ghcr.io -u ntheile --password-stdin
 docker pull ghcr.io/ntheile/arti-proxy:latest
 ```
+
+If `docker pull` or `docker run` fails with `denied`, one of these is true:
+
+- The GitHub Actions publish workflow has not run successfully yet.
+- The image exists, but the GitHub package is private.
+- The package is public in GitHub, but GHCR package visibility has not been changed to public.
+- The image name or owner does not match `ghcr.io/ntheile/arti-proxy`.
+
+For a public image, open the package in GitHub and set package visibility to public. For a private image, use the `docker login ghcr.io` command above before pulling.
 
 Verify the container:
 
