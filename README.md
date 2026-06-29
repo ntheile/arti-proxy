@@ -161,6 +161,26 @@ docker run -d \
   ghcr.io/ntheile/arti-proxy:latest
 ```
 
+On an Apple Silicon Mac, run the amd64 image explicitly:
+
+```sh
+docker rm -f arti-socks-proxy >/dev/null 2>&1 || true
+
+docker run -d \
+  --platform linux/amd64 \
+  --restart=always \
+  --name arti-socks-proxy \
+  --log-driver=local \
+  --log-opt max-size=10m \
+  --log-opt max-file=3 \
+  -e HEALTHCHECK_URL='https://check.torproject.org/api/ip' \
+  -e HEALTHCHECK_EXPECTED='"IsTor":true' \
+  -e HEALTHCHECK_MAX_TIME=30 \
+  -p 0.0.0.0:9150:9150/tcp \
+  -p 0.0.0.0:5353:8853/udp \
+  ghcr.io/ntheile/arti-proxy:latest
+```
+
 If the GitHub package is private, log in to GHCR first with a GitHub personal access token that can read packages:
 
 ```sh
@@ -183,6 +203,20 @@ Verify the container:
 docker ps --filter name=arti-socks-proxy
 docker inspect arti-socks-proxy --format '{{json .State.Health}}'
 docker logs --tail=100 arti-socks-proxy
+```
+
+Test the exposed SOCKS proxy from the host:
+
+```sh
+curl --fail --silent --show-error --max-time 30 \
+  --socks5-hostname 127.0.0.1:9150 \
+  https://check.torproject.org/api/ip
+```
+
+Expected response:
+
+```json
+{"IsTor":true,"IP":"..."}
 ```
 
 ## Healthcheck settings
@@ -208,4 +242,10 @@ Manual Tor check from the host:
 curl --fail --silent --show-error --max-time 30 \
   --socks5-hostname 127.0.0.1:9150 \
   https://check.torproject.org/api/ip
+```
+
+Or:
+
+```sh
+make curl-test
 ```

@@ -8,8 +8,9 @@ HEALTHCHECK_EXPECTED ?= "IsTor":true
 HEALTHCHECK_MAX_TIME ?= 30
 TEST_RETRIES ?= 24
 TEST_SLEEP ?= 5
+CURL_TEST_URL ?= https://check.torproject.org/api/ip
 
-.PHONY: help build run stop restart logs health test compose-up compose-down clean
+.PHONY: help build run stop restart logs health curl-test test compose-up compose-down clean
 
 help:
 	@printf '%s\n' 'Targets:'
@@ -19,6 +20,7 @@ help:
 	@printf '%s\n' '  make restart      Recreate $(CONTAINER)'
 	@printf '%s\n' '  make logs         Tail container logs'
 	@printf '%s\n' '  make health       Show Docker health status'
+	@printf '%s\n' '  make curl-test    Test the host SOCKS port with curl'
 	@printf '%s\n' '  make test         Build and verify healthcheck in a disposable container'
 	@printf '%s\n' '  make compose-up   Build and start with Docker Compose'
 	@printf '%s\n' '  make compose-down Stop Docker Compose service'
@@ -59,6 +61,11 @@ logs:
 
 health:
 	docker inspect $(CONTAINER) --format '{{json .State.Health}}'
+
+curl-test:
+	curl --fail --silent --show-error --max-time $(HEALTHCHECK_MAX_TIME) \
+		--socks5-hostname 127.0.0.1:9150 \
+		$(CURL_TEST_URL)
 
 test: build
 	@set -eu; \
