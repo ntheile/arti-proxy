@@ -274,7 +274,7 @@ Remote test:
 ```sh
 curl --fail --show-error --verbose --max-time 30 \
   --proxy-user 'arti:use-a-long-random-password' \
-  --socks5-hostname 174.138.126.205:9150 \
+  --socks5-hostname YOUR_VM_PUBLIC_IP:9150 \
   https://check.torproject.org/api/ip
 ```
 
@@ -284,7 +284,7 @@ Or use the Make target:
 make curl-test \
   SOCKS_USERNAME='arti' \
   SOCKS_PASSWORD='use-a-long-random-password' \
-  CURL_TEST_HOST='174.138.126.205' \
+  CURL_TEST_HOST='YOUR_VM_PUBLIC_IP' \
   CURL_TEST_VERBOSE=1
 ```
 
