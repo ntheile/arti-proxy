@@ -1,0 +1,20 @@
+services:
+  arti-socks-proxy:
+    build:
+      context: .
+    image: local/arti-socks-proxy:latest
+    platform: linux/amd64
+    container_name: arti-socks-proxy
+    restart: always
+    environment:
+      HEALTHCHECK_URL: https://check.torproject.org/api/ip
+      HEALTHCHECK_EXPECTED: '"IsTor":true'
+      HEALTHCHECK_MAX_TIME: 30
+    ports:
+      - "9150:9150/tcp"
+      - "5353:8853/udp"
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "3"
