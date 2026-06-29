@@ -94,7 +94,7 @@ name: Publish Docker image
 
 on:
   push:
-    branches: [main, master]
+    branches: ["**"]
     tags: ["v*"]
   workflow_dispatch:
 
@@ -122,6 +122,7 @@ jobs:
           images: ghcr.io/ntheile/arti-proxy
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
             type=ref,event=tag
             type=sha
 
@@ -134,7 +135,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
 ```
 
-Push to the default branch, or run the workflow manually from GitHub Actions. After it completes, the image should be available from GHCR.
+Push any branch, or run the workflow manually from GitHub Actions. Default-branch builds publish `latest`; branch builds publish a branch tag such as `ghcr.io/ntheile/arti-proxy:authenticated-socks`.
 
 The pinned Tor Arti base image used by this project is `linux/amd64`, so the published image is built as `linux/amd64`. Use a normal amd64 VM, which is the default for most DigitalOcean droplets.
 
