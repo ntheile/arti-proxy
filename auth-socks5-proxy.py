@@ -150,27 +150,27 @@ async def open_upstream(request_address):
 
 async def open_upstream_with_retries(request_address):
     last_exc = None
-    attempts = max(1, UPSTREAM_CONNECT_RETRIES)
-    for attempt in range(1, attempts + 1):
+    total_attempts = 1 + max(0, UPSTREAM_CONNECT_RETRIES)
+    for attempt in range(1, total_attempts + 1):
         try:
             status, reply, reader, writer = await open_upstream(request_address)
         except Exception as exc:
             last_exc = exc
-            if attempt >= attempts:
+            if attempt >= total_attempts:
                 raise
             print(
-                f"upstream SOCKS attempt {attempt}/{attempts} failed: {exc}; retrying",
+                f"upstream SOCKS attempt {attempt}/{total_attempts} failed: {exc}; retrying",
                 file=sys.stderr,
                 flush=True,
             )
         else:
             if status == 0:
                 return status, reply, reader, writer
-            if status not in RETRYABLE_UPSTREAM_STATUSES or attempt >= attempts:
+            if status not in RETRYABLE_UPSTREAM_STATUSES or attempt >= total_attempts:
                 return status, reply, reader, writer
             message = upstream_status_message(status)
             print(
-                f"upstream SOCKS attempt {attempt}/{attempts} failed with status {status} ({message}); retrying",
+                f"upstream SOCKS attempt {attempt}/{total_attempts} failed with status {status} ({message}); retrying",
                 file=sys.stderr,
                 flush=True,
             )

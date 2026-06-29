@@ -336,7 +336,7 @@ SOCKS_USERNAME='arti' SOCKS_PASSWORD='use-a-long-random-password' \
 | `SOCKS_PORT` | `9151` | Internal Arti SOCKS listener used by the healthcheck. |
 | `PUBLIC_SOCKS_PORT` | `9150` | Public authenticated SOCKS5 listener. |
 | `SOCKS_HANDSHAKE_TIMEOUT` | `15` | Seconds allowed for SOCKS auth, request parsing, and upstream SOCKS setup before the client is disconnected. |
-| `UPSTREAM_CONNECT_RETRIES` | `3` | Arti upstream SOCKS connection attempts before the authenticated listener returns an error to the client. |
+| `UPSTREAM_CONNECT_RETRIES` | `3` | Arti upstream SOCKS retries after the initial connection attempt before the authenticated listener returns an error to the client. |
 | `UPSTREAM_CONNECT_RETRY_DELAY` | `1` | Seconds to wait between upstream SOCKS connection attempts. |
 | `DNS_LISTEN` | `127.0.0.1:8853` | Internal Arti DNS listener. Set to `0.0.0.0:8853` only when intentionally exposing DNS. |
 
