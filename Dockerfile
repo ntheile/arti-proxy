@@ -1,4 +1,4 @@
-FROM containers.torproject.org/tpo/onion-services/onimages/arti@sha256:852d7a334d99e00875924a0d33288e75a897ca2196bcd649c951b9a1158ac38b
+FROM containers.torproject.org/tpo/onion-services/onimages/arti:alpine-amd64@sha256:61fbf8be18d8e69070f86475db1ae804f1123f36920caee965ef4967e5273b00
 
 USER root
 RUN apk add --no-cache curl python3
